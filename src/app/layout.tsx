@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Rede Solidária - Cuidado Compartilhado',
+  title: 'Rede Solidária - Rede de Apoio',
   description: 'Comunidade de apoio para pais, familiares e cuidadores.',
 };
 

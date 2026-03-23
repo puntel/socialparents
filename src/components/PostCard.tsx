@@ -19,6 +19,7 @@ interface PostCardProps {
     content: string;
     tags?: string[];
     isSensitive?: boolean;
+    subcategoryName?: string;
 }
 
 export function PostCard({
@@ -30,8 +31,9 @@ export function PostCard({
     content,
     tags = [],
     isSensitive = false,
+    subcategoryName,
 }: PostCardProps) {
-    const [showSensitive, setShowSensitive] = useState(!isSensitive);
+
     const [supported, setSupported] = useState(false);
 
     // Comentários
@@ -85,28 +87,27 @@ export function PostCard({
                             <span className="text-xs text-gray-400 ml-2">Há 2 horas</span>
                         </div>
                     </div>
-                    <span className={`text-xs px-3 py-1 rounded-full font-bold shadow-sm ${categoryColorClass}`}>
-                        {categoryName}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className={`text-xs px-3 py-1 rounded-full font-bold shadow-sm ${categoryColorClass}`}>
+                            {categoryName}
+                        </span>
+                        {subcategoryName && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                                ↳ {subcategoryName}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Body */}
                 <div className="relative mb-3">
-                    <p className={`text-base leading-relaxed text-gray-700 dark:text-gray-200 ${!showSensitive ? 'blur-md select-none' : ''}`}>
+                    <p className="text-base leading-relaxed text-gray-700 dark:text-gray-200">
                         {content}
                     </p>
-                    {!showSensitive && (
-                        <button
-                            onClick={() => setShowSensitive(true)}
-                            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-900/80 hover:bg-gray-900 text-white px-4 py-2 rounded-full text-sm font-medium backdrop-blur-sm transition-colors shadow-lg z-10"
-                        >
-                            ⚠️ Mostrar conteúdo sensível
-                        </button>
-                    )}
                 </div>
 
                 {/* Tags */}
-                {tags && tags.length > 0 && showSensitive && (
+                {tags && tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
                         {tags.map((tag, idx) => (
                             <span key={idx} className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md">

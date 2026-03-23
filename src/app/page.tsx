@@ -27,7 +27,8 @@ export default function Home() {
   const [postCategoryId, setPostCategoryId] = useState<string>('');
   const [postCategoryColor, setPostCategoryColor] = useState<string>('');
   const [postSubcategory, setPostSubcategory] = useState<string>('');
-  const [postMood, setPostMood] = useState<string>('');
+  const [postSubcategoryId, setPostSubcategoryId] = useState<string>('');
+
   const [postContent, setPostContent] = useState<string>('');
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,7 +58,7 @@ export default function Home() {
       .from('posts')
       .select('*')
       .order('created_at', { ascending: false });
-    setPosts(data ?? []);
+    setPosts((data as Post[]) ?? []);
     setIsLoadingPosts(false);
   }, []);
 
@@ -81,12 +82,14 @@ export default function Home() {
     const { error } = await supabase
       .from('categories')
       .insert({ label: newCatName.trim(), color_class: newCatColor });
-    if (!error) {
-      await fetchCategories();
-      setNewCatName('');
-      setNewCatColor(CATEGORY_COLORS[0].colorClass);
-      setShowNewCatModal(false);
+    if (error) {
+      alert(`Erro Categoria: ${error.message}`);
+      return;
     }
+    await fetchCategories();
+    setNewCatName('');
+    setNewCatColor(CATEGORY_COLORS[0].colorClass);
+    setShowNewCatModal(false);
   };
 
   // ─── Category Modal (Edit) ────────────────────────────────────────
@@ -119,18 +122,42 @@ export default function Home() {
     const oldLabel = editingCat.label;
 
     // Update category in DB
-    await supabase
+    const { error: updateErr } = await supabase
       .from('categories')
       .update({ label: editCatName.trim(), color_class: editCatColor })
       .eq('id', editingCat.id);
 
-    // Sync subcategories: delete all old and re-insert
-    await supabase.from('subcategories').delete().eq('category_id', editingCat.id);
-    const newSubcats = editSubcategories
-      .filter(s => s.label.trim())
+    if (updateErr) {
+      alert(`Erro ao atualizar categoria: ${updateErr.message}`);
+      return;
+    }
+
+    // Sync subcategories without mass-deleting to preserve FOREIGN KEY references
+    const originalSubcats = editingCat.subcategories || [];
+    
+    // 1. Delete removed subcats
+    const editSubcatIds = editSubcategories.map(s => s.id);
+    const toDelete = originalSubcats.filter(s => !editSubcatIds.includes(s.id));
+    if (toDelete.length > 0) {
+      const { error: delErr } = await supabase.from('subcategories').delete().in('id', toDelete.map(s => s.id));
+      if (delErr) console.error('Erro deletar subcat', delErr);
+    }
+
+    // 2. Update existing subcats that changed
+    const toUpdate = editSubcategories.filter(s => !s.id.startsWith('temp-') && s.label.trim() !== originalSubcats.find(o => o.id === s.id)?.label);
+    for (const sub of toUpdate) {
+      const { error: updErr } = await supabase.from('subcategories').update({ label: sub.label.trim() }).eq('id', sub.id);
+      if (updErr) console.error('Erro atualizar subcat', updErr);
+      else await supabase.from('posts').update({ subcategory_name: sub.label.trim() }).eq('subcategory_id', sub.id);
+    }
+
+    // 3. Insert new subcats
+    const toInsert = editSubcategories
+      .filter(s => s.id.startsWith('temp-') && s.label.trim())
       .map(s => ({ category_id: editingCat.id, label: s.label.trim() }));
-    if (newSubcats.length > 0) {
-      await supabase.from('subcategories').insert(newSubcats);
+    if (toInsert.length > 0) {
+      const { error: insErr } = await supabase.from('subcategories').insert(toInsert);
+      if (insErr) console.error('Erro inserir subcat', insErr);
     }
 
     // Update posts that referenced the old category label
@@ -154,7 +181,11 @@ export default function Home() {
       setActiveCategory(null);
       setActiveSubcategory(null);
     }
-    await supabase.from('categories').delete().eq('id', catId);
+    const { error } = await supabase.from('categories').delete().eq('id', catId);
+    if (error) {
+      alert(`Erro Excluir: ${error.message}`);
+      return;
+    }
     await fetchCategories();
   };
 
@@ -176,7 +207,7 @@ export default function Home() {
       : posts;
 
     if (activeSubcategory) {
-      result = result.filter(p => p.tags && p.tags.includes(activeSubcategory));
+      result = result.filter(p => p.subcategory_name === activeSubcategory);
     }
 
     const sorted = [...result];
@@ -215,13 +246,15 @@ export default function Home() {
     const newTags: string[] = [];
     if (postSubcategory) newTags.push(postSubcategory);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('posts')
       .insert({
         author_name: 'Você',
         author_role: 'Membro da Rede',
         category_id: postCategoryId || null,
         category_name: postCategory,
+        subcategory_id: postSubcategoryId || null,
+        subcategory_name: postSubcategory || null,
         color_class: postCategoryColor,
         content: postContent.trim(),
         tags: newTags,
@@ -233,8 +266,13 @@ export default function Home() {
       .select()
       .single();
 
+    if (error) {
+      alert(`Erro Publicar: ${error.message}`);
+      return;
+    }
+
     if (data) {
-      setPosts([data, ...posts]);
+      setPosts([data as Post, ...posts]);
     }
 
     setPostContent('');
@@ -242,7 +280,7 @@ export default function Home() {
     setPostCategoryId('');
     setPostCategoryColor('');
     setPostSubcategory('');
-    setPostMood('');
+    setPostSubcategoryId('');
   };
 
   const getCreatorColor = () => {
@@ -323,7 +361,7 @@ export default function Home() {
       {/* Modal: Editar Categoria (Master Only) */}
       {editingCat && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#252830] rounded-3xl max-w-sm w-full p-6 shadow-2xl relative">
+          <div className="bg-white dark:bg-[#252830] rounded-3xl max-w-sm w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button onClick={() => setEditingCat(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">✕</button>
 
             <div className="mb-6">
@@ -371,9 +409,18 @@ export default function Home() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Subcategorias</label>
                 <div className="space-y-1 mb-2">
-                  {editSubcategories.map(sub => (
+                  {editSubcategories.map((sub, index) => (
                     <div key={sub.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1A1C23] px-3 py-1.5 rounded-lg">
-                      <span className="text-xs text-gray-700 dark:text-gray-300">{sub.label}</span>
+                      <input
+                        type="text"
+                        value={sub.label}
+                        onChange={(e) => {
+                          const newSubs = [...editSubcategories];
+                          newSubs[index].label = e.target.value;
+                          setEditSubcategories(newSubs);
+                        }}
+                        className="bg-transparent border-none focus:ring-0 text-xs text-gray-700 dark:text-gray-300 w-full p-0"
+                      />
                       <button onClick={() => handleRemoveSubcategory(sub.id)} className="text-red-400 hover:text-red-600 text-xs ml-2">✕</button>
                     </div>
                   ))}
@@ -418,7 +465,7 @@ export default function Home() {
       <header className="sticky top-0 z-40 bg-white dark:bg-[#1A1C23] border-b border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-8">
-            <h1 className="text-xl font-black text-brand-blue">Cuidado Compartilhado</h1>
+            <h1 className="text-xl font-black text-brand-blue">Rede de Apoio</h1>
             <div className="hidden md:flex items-center bg-gray-50 dark:bg-gray-800 rounded-full px-4 py-2 w-80">
               <span className="text-gray-400 mr-2">🔍</span>
               <input type="text" placeholder="Buscar posts, diagnósticos..." className="bg-transparent border-none focus:outline-none w-full text-sm text-gray-700 dark:text-gray-200" />
@@ -454,18 +501,18 @@ export default function Home() {
           <div className="bg-white dark:bg-[#252830] rounded-3xl p-6 shadow-sm sticky top-28">
             <nav className="space-y-4 mb-8">
               <a href="#" className="flex items-center text-brand-blue dark:text-brand-blue font-bold px-3 py-2 bg-brand-blue/5 rounded-xl transition-colors">
-                <span className="mr-3 text-xl">🌐</span> Feed Global
+                <span className="mr-3 text-xl">🌐</span> Início
               </a>
               <a href="#" className="flex items-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium px-3 py-2 rounded-xl transition-colors">
-                <span className="mr-3 text-xl">👥</span> Meus Grupos
+                <span className="mr-3 text-xl">👥</span> Categorias Favoritas
               </a>
               <Link href="/salvos" className="flex items-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium px-3 py-2 rounded-xl transition-colors">
-                <span className="mr-3 text-xl">🔖</span> Salvos
+                <span className="mr-3 text-xl">🔖</span> Mensagens salvas
               </Link>
             </nav>
 
             <div className="flex items-center justify-between mb-4 px-3">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filtrar Categoria</h3>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Criar Nova Categoria</h3>
               {isMaster && (
                 <button
                   onClick={() => setShowNewCatModal(true)}
@@ -569,6 +616,9 @@ export default function Home() {
                     setPostCategory(e.target.value);
                     setPostCategoryId(selected?.id ?? '');
                     setPostCategoryColor(selected?.color_class ?? '');
+                    // Reset subcategory when category changes
+                    setPostSubcategory('');
+                    setPostSubcategoryId('');
                   }}
                   className="bg-gray-50 dark:bg-gray-800 border-none text-sm text-gray-600 dark:text-gray-300 rounded-xl focus:ring-0 cursor-pointer font-medium py-1.5"
                 >
@@ -576,16 +626,28 @@ export default function Home() {
                   {categories.map(c => <option key={c.id} value={c.label}>{c.label}</option>)}
                 </select>
 
-                <select
-                  value={postMood}
-                  onChange={(e) => setPostMood(e.target.value)}
-                  className="bg-orange-50 dark:bg-orange-900/20 text-orange-600 border-none text-sm rounded-xl focus:ring-0 cursor-pointer font-medium py-1.5"
-                >
-                  <option value="" disabled>🎭 Humor do Dia</option>
-                  <option value="feliz">☀️ Esperançoso(a)</option>
-                  <option value="exausto">🌧️ Exausto(a)</option>
-                  <option value="orgulhoso">🌟 Orgulhoso(a)</option>
-                </select>
+                {/* Subcategory dropdown - only shown when selected category has subcategories */}
+                {postCategoryId && categories.find(c => c.id === postCategoryId)?.subcategories?.length ? (
+                  <select
+                    value={postSubcategory}
+                    onChange={(e) => {
+                      const cat = categories.find(c => c.id === postCategoryId);
+                      const sub = cat?.subcategories?.find(s => s.label === e.target.value);
+                      setPostSubcategory(e.target.value);
+                      setPostSubcategoryId(sub?.id ?? '');
+                    }}
+                    className="bg-gray-50 dark:bg-gray-800 border-none text-sm text-gray-600 dark:text-gray-300 rounded-xl focus:ring-0 cursor-pointer font-medium py-1.5"
+                  >
+                    <option value="" disabled>↳ Subcategoria</option>
+                    {categories
+                      .find(c => c.id === postCategoryId)
+                      ?.subcategories?.map(s => (
+                        <option key={s.id} value={s.label}>{s.label}</option>
+                      ))}
+                  </select>
+                ) : null}
+
+
               </div>
 
               <button
@@ -657,6 +719,7 @@ export default function Home() {
                   content={post.content}
                   tags={post.tags}
                   isSensitive={post.is_sensitive}
+                  subcategoryName={post.subcategory_name ?? undefined}
                 />
               ))}
               {filteredAndSortedPosts.length === 0 && (
@@ -694,17 +757,7 @@ export default function Home() {
         {/* COLUNA 3: Widgets e Sugestões */}
         <aside className="hidden lg:block w-72 flex-shrink-0">
           <div className="sticky top-28 space-y-6">
-            <div className="bg-brand-blue/5 border border-brand-blue/10 rounded-3xl p-5 shadow-sm">
-              <h3 className="font-bold text-brand-blue mb-2 flex items-center">
-                <span className="mr-2">🫂</span> Acolhimento Ativo
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
-                Lembre-se: Você não está sozinho. A rede está aqui para ouvir.
-              </p>
-              <button className="w-full py-2 bg-brand-blue text-white rounded-xl text-sm font-bold shadow-sm hover:brightness-110 transition-all">
-                Conhecer a Rede CVV
-              </button>
-            </div>
+
 
             <div className="bg-white dark:bg-[#252830] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-gray-800">
               <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4">Em Alta (Tags)</h3>

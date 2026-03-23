@@ -1,6 +1,6 @@
 // ============================================================
 // Social Parents - Supabase Database Types
-// Auto-generated from schema. Keep in sync with migrations.
+// Keep in sync with migrations.
 // ============================================================
 
 export type Json =
@@ -11,7 +11,8 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export interface Database {
+export type Database = {
+  PostgrestVersion: '12'
   public: {
     Tables: {
       categories: {
@@ -33,6 +34,7 @@ export interface Database {
           color_class?: string
           created_at?: string
         }
+        Relationships: []
       }
       subcategories: {
         Row: {
@@ -53,6 +55,15 @@ export interface Database {
           label?: string
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'subcategories_category_id_fkey'
+            columns: ['category_id']
+            isOneToOne: false
+            referencedRelation: 'categories'
+            referencedColumns: ['id']
+          }
+        ]
       }
       profiles: {
         Row: {
@@ -82,6 +93,7 @@ export interface Database {
           is_admin?: boolean
           created_at?: string
         }
+        Relationships: []
       }
       posts: {
         Row: {
@@ -91,6 +103,8 @@ export interface Database {
           author_role: string
           category_id: string | null
           category_name: string
+          subcategory_id: string | null
+          subcategory_name: string | null
           color_class: string
           content: string
           tags: string[]
@@ -107,6 +121,8 @@ export interface Database {
           author_role: string
           category_id?: string | null
           category_name: string
+          subcategory_id?: string | null
+          subcategory_name?: string | null
           color_class: string
           content: string
           tags?: string[]
@@ -123,6 +139,8 @@ export interface Database {
           author_role?: string
           category_id?: string | null
           category_name?: string
+          subcategory_id?: string | null
+          subcategory_name?: string | null
           color_class?: string
           content?: string
           tags?: string[]
@@ -132,6 +150,22 @@ export interface Database {
           support_count?: number
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'posts_category_id_fkey'
+            columns: ['category_id']
+            isOneToOne: false
+            referencedRelation: 'categories'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'posts_subcategory_id_fkey'
+            columns: ['subcategory_id']
+            isOneToOne: false
+            referencedRelation: 'subcategories'
+            referencedColumns: ['id']
+          }
+        ]
       }
     }
     Views: Record<string, never>

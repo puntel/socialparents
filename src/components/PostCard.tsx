@@ -70,7 +70,6 @@ export function PostCard({
         });
     };
 
-    const isMedicalPost = categoryName.toLowerCase() === 'médico' || categoryName.toLowerCase() === 'saúde' || categoryName.toLowerCase() === 'tratamentos';
 
     return (
         <div className="bg-white dark:bg-[#252830] rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 mb-6 transition-all overflow-hidden flex flex-col">
@@ -194,14 +193,11 @@ export function PostCard({
             </div>
 
             {/* Medical Disclaimer */}
-            {isMedicalPost && (
-                <div className="bg-gray-50 dark:bg-gray-800/50 px-5 py-3 border-t border-gray-100 dark:border-gray-800 flex items-start space-x-3">
-                    <span className="text-brand-blue text-lg">ℹ️</span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-tight">
-                        <strong>Nota da Comunidade:</strong> Este relato é uma experiência pessoal. Sempre consulte um médico especialista antes de alterar tratamentos ou medicações.
-                    </p>
-                </div>
-            )}
+            <div className="bg-gray-50/50 dark:bg-gray-800/30 px-5 py-2.5 border-t border-gray-100 dark:border-gray-800 flex items-center justify-center">
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 tracking-wider">
+                    Disclaimer Médico: A plataforma não substitui a consulta médica profissional.
+                </p>
+            </div>
         </div>
     );
 }
